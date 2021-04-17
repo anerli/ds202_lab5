@@ -9,11 +9,24 @@ output: html_document
 library(tidyverse)
 library(rmarkdown)
 library(lubridate)
+library(ggrepel)
 states <- map_data("state")
 state_names <- states %>% group_by(region) %>% summarize(long=mean(long), lat=mean(lat))
 acc <- read.csv("https://raw.githubusercontent.com/xdaiISU/ds202materials/master/hwlabs/fars2017/accident.csv", stringsAsFactors = FALSE)
 ppl <- read.csv("https://raw.githubusercontent.com/xdaiISU/ds202materials/master/hwlabs/fars2017/person.csv", stringsAsFactors = FALSE)
 glc <- readxl::read_xlsx("FRPP_GLC.xlsx")
+```
+
+# Preprocessing
+```{r}
+# Preprocess GLC
+glc$STATE = as.numeric(glc$`State Code`)
+
+
+#acc_with_state <- acc %>% left_join(ppl, by=c('ST_CASE', 'STATE'))
+#acc1 <- acc_with_state %>% left_join()
+glc_states <- glc %>% group_by(STATE) %>% summarize(state_name=first(`State Name`))
+acc_with_state_names <- acc %>% left_join(glc_states, by=c('STATE'))
 ```
 
 # 1
@@ -44,19 +57,49 @@ Here we see a few entries of the dataset created which contains only the people 
 # 3
 ```{r}
 # First get the MAKE for each accident
-dat <- acc %>% inner_join(ppl, by=c('ST_CASE', 'STATE')) %>% select(STATE, MAKE)
-dat
+dat <- acc_with_state_names %>% inner_join(ppl, by=c('ST_CASE', 'STATE')) %>% select(STATE, state_name, MAKE)
 
-dat %>%
+most_dangerous <- dat %>%
   filter(!is.na(MAKE)) %>%
-  group_by(STATE, MAKE) %>%
+  group_by(STATE, state_name, MAKE) %>%
   summarize(number_accidents=n()) %>%
   filter(number_accidents==max(number_accidents))
+most_dangerous
 ```
 Here we can see the most dangerous make ID for each state ID, as well as the number of 
 fatal accidents for each of those state/make combinations.
 
 # 4
 ```{r}
-ggplot(states, aes(x=long, y=lat)) + geom_polygon(aes(group=group))
+dat <- acc_with_state_names %>% inner_join(ppl, by=c('ST_CASE', 'STATE')) %>% select(STATE, state_name, MAKE)#, LATITUDE, LONGITUD)
+
+most_dangerous <- dat %>%
+  filter(!is.na(MAKE)) %>%
+  group_by(STATE, state_name, MAKE) %>%
+  summarize(number_accidents=n()) %>% #, avg_lat=mean(LATITUDE), avg_long=mean(LONGITUD)) %>%
+  filter(number_accidents==max(number_accidents))
+
+most_dangerous
+
+states$region = toupper(states$region)
+
+avg_state_locations <- states %>% group_by(region) %>% summarize(avg_long=mean(long), avg_lat=mean(lat))
+avg_state_locations
+
+dangerous_with_location <- most_dangerous %>% mutate(region=state_name) %>% inner_join(avg_state_locations, by=c('region'))
+dangerous_with_location
+
+ggplot(states, aes(x=long, y=lat)) + geom_polygon(aes(group=group)) +
+  geom_text_repel(data=dangerous_with_location, aes(x=avg_long, y=avg_lat, label=MAKE), color='green')
 ```
+
+Here we can see the most dangerous vehicle (most fatal accidents) make code for each state.
+
+# 5
+```{r}
+acc_ppl <- acc %>% inner_join(ppl, by=c('ST_CASE'))
+head(acc_ppl)
+```
+
+Show above are a few entries of the joined dataframe. ST_CASE identifies each accident, so we join by that variable.
+
