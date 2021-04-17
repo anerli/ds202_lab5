@@ -22,9 +22,6 @@ glc <- readxl::read_xlsx("FRPP_GLC.xlsx")
 # Preprocess GLC
 glc$STATE = as.numeric(glc$`State Code`)
 
-
-#acc_with_state <- acc %>% left_join(ppl, by=c('ST_CASE', 'STATE'))
-#acc1 <- acc_with_state %>% left_join()
 glc_states <- glc %>% group_by(STATE) %>% summarize(state_name=first(`State Name`))
 acc_with_state_names <- acc %>% left_join(glc_states, by=c('STATE'))
 ```
@@ -64,30 +61,18 @@ most_dangerous <- dat %>%
   group_by(STATE, state_name, MAKE) %>%
   summarize(number_accidents=n()) %>%
   filter(number_accidents==max(number_accidents))
-most_dangerous
+most_dangerous %>% paged_table
 ```
 Here we can see the most dangerous make ID for each state ID, as well as the number of 
 fatal accidents for each of those state/make combinations.
 
 # 4
 ```{r}
-dat <- acc_with_state_names %>% inner_join(ppl, by=c('ST_CASE', 'STATE')) %>% select(STATE, state_name, MAKE)#, LATITUDE, LONGITUD)
-
-most_dangerous <- dat %>%
-  filter(!is.na(MAKE)) %>%
-  group_by(STATE, state_name, MAKE) %>%
-  summarize(number_accidents=n()) %>% #, avg_lat=mean(LATITUDE), avg_long=mean(LONGITUD)) %>%
-  filter(number_accidents==max(number_accidents))
-
-most_dangerous
-
 states$region = toupper(states$region)
 
 avg_state_locations <- states %>% group_by(region) %>% summarize(avg_long=mean(long), avg_lat=mean(lat))
-avg_state_locations
 
 dangerous_with_location <- most_dangerous %>% mutate(region=state_name) %>% inner_join(avg_state_locations, by=c('region'))
-dangerous_with_location
 
 ggplot(states, aes(x=long, y=lat)) + geom_polygon(aes(group=group)) +
   geom_text_repel(data=dangerous_with_location, aes(x=avg_long, y=avg_lat, label=MAKE), color='green')
@@ -97,9 +82,75 @@ Here we can see the most dangerous vehicle (most fatal accidents) make code for 
 
 # 5
 ```{r}
-acc_ppl <- acc %>% inner_join(ppl, by=c('ST_CASE'))
-head(acc_ppl)
+acc_ppl <- acc %>% inner_join(ppl)
+paged_table(acc_ppl)
 ```
 
-Show above are a few entries of the joined dataframe. ST_CASE identifies each accident, so we join by that variable.
+Show above are a few entries of the joined dataframe. ST_CASE identifies each accident, so we could join by that variable,
+but we can also just allow R to match by all matching columns to get an equivalent result.
+
+# 6
+```{r}
+acc %>% group_by(DAY_WEEK) %>%
+  summarize(number_accidents=n()) %>%
+  mutate(weekday=c('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat')) %>%
+  select(-DAY_WEEK) %>%
+  subset(select=c(2,1)) %>%
+  ggplot(aes(x=weekday, weight=number_accidents)) + geom_bar() +
+  xlab('Day of Week') + ylab('Number of Accidents')
+  
+
+acc %>% group_by(HOUR) %>%
+  filter(HOUR != 99) %>%
+  summarize(number_accidents=n()) %>%
+  ggplot(aes(x=HOUR, weight=number_accidents)) + geom_bar() +
+  xlab('Hour in Day') + ylab('Number of Accidents')
+
+acc_ppl %>% group_by(SEX) %>%
+  summarize(number_accidents=n()) %>%
+  ggplot(aes(x=SEX, weight=number_accidents)) + geom_bar() +
+  xlab('Sex Attribute Code') + ylab('Number of Accidents')
+```
+
+We can see from these summaries that Saturday is the most common day on which fatal accidents occur,
+fatal accidents are most common around hour 18 (6 PM), and that males (Sex Attribute 1) are about twice
+as likely to be in an accident that females (Sex Attribute 2).
+
+# 7
+```{r}
+counties <- map_data('county')
+
+deaths_by_county <- acc_ppl %>% 
+  filter(INJ_SEV==4) %>% 
+  group_by(STATE, COUNTY) %>%
+  summarize(total_deaths=n())
+
+glc_counties <- glc %>%
+  mutate(STATE=as.numeric(`State Code`), COUNTY=as.numeric(`County Code`), region=tolower(`State Name`), subregion=tolower(`County Name`)) %>%
+  group_by(region, subregion, STATE, COUNTY) %>%
+  summarize(region=first(region), subregion=first(subregion), STATE=first(STATE), COUNTY=first(COUNTY))
+
+#glc_loc %>% glc_counties %>% left_join()
+#glc_counties
+#deaths_by_county
+#counties
+
+deaths_by_county_with_names <- deaths_by_county %>% left_join(glc_counties, by=c('STATE', 'COUNTY'))
+deaths_by_county_with_names
+
+#counties
+
+dat <- counties %>% left_join(deaths_by_county_with_names, by=c('region', 'subregion'))
+#dat <- deaths_by_county_with_names %>% left_join(counties, by=c('region', 'subregion'))
+
+head(deaths_by_county_with_names)
+head(counties)
+head(dat)
+
+
+#counties_with_codes <- counties %>% inner_join(glc_counties, by=c('region', 'subregion'))
+#counties_with_codes
+#dat
+ggplot(dat, aes(x=long, y=lat, fill=total_deaths)) + geom_polygon(aes(group=group))
+```
 
