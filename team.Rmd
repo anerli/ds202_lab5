@@ -1,0 +1,62 @@
+---
+title: "Lab 5"
+author: "Anders Lie"
+date: "4/16/2021"
+output: html_document
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(rmarkdown)
+library(lubridate)
+states <- map_data("state")
+state_names <- states %>% group_by(region) %>% summarize(long=mean(long), lat=mean(lat))
+acc <- read.csv("https://raw.githubusercontent.com/xdaiISU/ds202materials/master/hwlabs/fars2017/accident.csv", stringsAsFactors = FALSE)
+ppl <- read.csv("https://raw.githubusercontent.com/xdaiISU/ds202materials/master/hwlabs/fars2017/person.csv", stringsAsFactors = FALSE)
+glc <- readxl::read_xlsx("FRPP_GLC.xlsx")
+```
+
+# 1
+```{r}
+acc %>% group_by(DAY_WEEK) %>%
+  summarize(number_accidents=n()) %>%
+  mutate(weekday=c('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat')) %>%
+  select(-DAY_WEEK) %>%
+  subset(select=c(2,1))
+```
+
+Using the data manual, we know that values of DAY_WEEK 1-7 corresponds to days, Sun-Sat, which we
+can use to get the weekday label for each integer representation. In the resulting table,
+we can see that on Fridays, Saturdays, and Sundays, there are generally a significantly 
+greater number of fatal accidents compared to Monday, Tuesday, Wednesday, or Thursday.
+
+The greatest number of fatal accidents occur on Saturdays.
+
+
+# 2
+```{r}
+fatal <- ppl %>% filter(INJ_SEV==4)
+head(fatal)
+```
+
+Here we see a few entries of the dataset created which contains only the people who suffered fatal injuries.
+
+# 3
+```{r}
+# First get the MAKE for each accident
+dat <- acc %>% inner_join(ppl, by=c('ST_CASE', 'STATE')) %>% select(STATE, MAKE)
+dat
+
+dat %>%
+  filter(!is.na(MAKE)) %>%
+  group_by(STATE, MAKE) %>%
+  summarize(number_accidents=n()) %>%
+  filter(number_accidents==max(number_accidents))
+```
+Here we can see the most dangerous make ID for each state ID, as well as the number of 
+fatal accidents for each of those state/make combinations.
+
+# 4
+```{r}
+ggplot(states, aes(x=long, y=lat)) + geom_polygon(aes(group=group))
+```
