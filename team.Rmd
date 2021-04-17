@@ -154,3 +154,30 @@ head(dat)
 ggplot(dat, aes(x=long, y=lat, fill=total_deaths)) + geom_polygon(aes(group=group))
 ```
 
+Above we can see the total deaths due to accidents by county. Grayed out counties had
+no records in the accident dataset, suggesting that most likely they have had no recorded
+fatal accidents.
+
+# 8
+```{r}
+summer <- acc_with_state_names %>% filter(MONTH %in% c(6,7,8))
+winter <- acc_with_state_names %>% filter(MONTH %in% c(12, 1, 2))
+
+nrow(summer)
+nrow(winter)
+```
+
+We can see that there are more fatal accidents during the summer, suggesting that
+the summer is more dangerous than the winter in general.
+
+```{r}
+summer1 <- summer %>% group_by(state_name) %>% summarize(num_summer_accidents=n())
+winter1 <- winter %>% group_by(state_name) %>% summarize(num_winter_accidents=n())
+
+dat <- inner_join(summer1, winter1)
+dat %>% filter(num_winter_accidents > num_summer_accidents) %>% paged_table
+```
+
+We can see that this does, however, depend on the state. The table above shows
+exactly which states for which there are more fatal accidents in the winter
+than in the summer.
